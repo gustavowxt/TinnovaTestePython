@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema de Veículos</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: Arial, sans-serif; line-height: 1.6; padding: 20px; }
+        .container { max-width: 1200px; margin: 0 auto; }
+        .header { background: #333; color: white; padding: 1rem; margin-bottom: 2rem; }
+        .nav { display: flex; gap: 1rem; margin-bottom: 2rem; }
+        .nav button { padding: 0.5rem 1rem; cursor: pointer; }
+        .section { display: none; margin-bottom: 2rem; padding: 1rem; border: 1px solid #ddd; }
+        .active { display: block; }
+        table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
+        th, td { padding: 0.75rem; text-align: left; border-bottom: 1px solid #ddd; }
+        th { background-color: #f4f4f4; }
+        .form-group { margin-bottom: 1rem; }
+        label { display: block; margin-bottom: 0.5rem; }
+        input, select, textarea { width: 100%; padding: 0.5rem; border: 1px solid #ddd; }
+        button { background: #333; color: white; border: none; padding: 0.5rem 1rem; cursor: pointer; }
+        button:hover { background: #555; }
+        .card { background: #f9f9f9; padding: 1rem; margin: 1rem 0; border-radius: 5px; }
+        .error { color: red; margin-top: 0.5rem; }
+        .success { color: green; margin-top: 0.5rem; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1> Sistema de Cadastro de Veículos</h1>
+        </div>
+
+        <div class="nav">
+            <button onclick="showSection('cadastro')">Cadastrar Veículo</button>
+            <button onclick="showSection('lista')">Listar Veículos</button>
+            <button onclick="showSection('dashboard')">Dashboard</button>
+        </div>
+
+        <div id="cadastro" class="section active">
+            <h2>Cadastrar Novo Veículo</h2>
+            <form id="formVeiculo">
+                <div class="form-group">
+                    <label for="veiculo">Veículo:</label>
+                    <input type="text" id="veiculo" name="veiculo" required>
+                </div>
+                <div class="form-group">
+                    <label for="marca">Marca:</label>
+                    <select id="marca" name="marca" required>
+                        <option value="">Selecione uma marca</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="ano">Ano:</label>
+                    <input type="number" id="ano" name="ano" min="1900" max="2099" required>
+                </div>
+                <div class="form-group">
+                    <label for="descricao">Descrição:</label>
+                    <textarea id="descricao" name="descricao" rows="3"></textarea>
+                </div>
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="vendido" name="vendido"> Vendido
+                    </label>
+                </div>
+                <button type="submit">Salvar Veículo</button>
+            </form>
+            <div id="mensagem"></div>
+        </div>
+
+        <div id="lista" class="section">
+            <h2>Lista de Veículos</h2>
+            <div class="form-group">
+                <input type="text" id="filtroMarca" placeholder="Filtrar por marca">
+                <input type="number" id="filtroAno" placeholder="Filtrar por ano">
+                <button onclick="filtrarVeiculos()">Filtrar</button>
+                <button onclick="carregarVeiculos()">Limpar Filtros</button>
+            </div>
+            <table id="tabelaVeiculos">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Veículo</th>
+                        <th>Marca</th>
+                        <th>Ano</th>
+                        <th>Vendido</th>
+                        <th>Ações</th>
+                    </tr>
+                </thead>
+                <tbody id="corpoTabela"></tbody>
+            </table>
+        </div>
+
+        <div id="dashboard" class="section">
+            <h2>Dashboard</h2>
+
+            <div class="card">
+                <h3>Veículos Não Vendidos</h3>
+                <p id="naoVendidos">Carregando...</p>
+            </div>
+
+            <div class="card">
+                <h3>Distribuição por Década</h3>
+                <div id="distribuicaoDecada">Carregando...</div>
+            </div>
+
+            <div class="card">
+                <h3>Distribuição por Marca</h3>
+                <div id="distribuicaoMarca">Carregando...</div>
+            </div>
+
+            <div class="card">
+                <h3>Registros da Última Semana</h3>
+                <div id="ultimaSemana">Carregando...</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = 'http://localhost:5000';
+        let veiculos = [];
+        let marcasValidas = [];
+
+        async function carregarMarcasValidas() {
+            try {
+                const response = await fetch(`${API_URL}/marcas-validas`);
+                marcasValidas = await response.json();
+                const select = document.getElementById('marca');
+                select.innerHTML = '<option value="">Selecione uma marca</option>';
+                marcasValidas.forEach(marca => {
+                    const option = document.createElement('option');
+                    option.value = marca;
+                    option.textContent = marca.charAt(0).toUpperCase() + marca.slice(1);
+                    select.appendChild(option);
+                });
+            } catch (error) {
+                console.error('Erro ao carregar marcas:', error);
+            }
+        }
+
+        function showSection(sectionId) {
+            document.querySelectorAll('.section').forEach(section => {
+                section.classList.remove('active');
+            });
+            document.getElementById(sectionId).classList.add('active');
+        }
+
+        // cadastrar veículo
+        document.getElementById('formVeiculo').addEventListener('submit', async function(e) {
+            e.preventDefault();
+
+            const formData = new FormData(this);
+            const data = {
+                veiculo: formData.get('veiculo'),
+                marca: formData.get('marca'),
+                ano: parseInt(formData.get('ano')),
+                descricao: formData.get('descricao'),
+                vendido: formData.get('vendido') === 'on'
+            };
+
+            try {
+                const response = await fetch(`${API_URL}/veiculos`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    showMessage('Veículo cadastrado com sucesso!', 'success');
+                    this.reset();
+                    carregarVeiculos();
+                } else {
+                    showMessage('Erro: ' + result.error, 'error');
+                }
+            } catch (error) {
+                showMessage('Erro ao cadastrar veículo: ' + error.message, 'error');
+            }
+        });
+
+        async function carregarVeiculos(filtros = {}) {
+            try {
+                const params = new URLSearchParams(filtros).toString();
+                const response = await fetch(`${API_URL}/veiculos?${params}`);
+                veiculos = await response.json();
+                renderizarTabela();
+            } catch (error) {
+                console.error('Erro ao carregar veículos:', error);
+            }
+        }
+
+        function renderizarTabela() {
+            const corpo = document.getElementById('corpoTabela');
+            corpo.innerHTML = '';
+
+            veiculos.forEach(veiculo => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${veiculo.id}</td>
+                    <td>${veiculo.veiculo}</td>
+                    <td>${veiculo.marca}</td>
+                    <td>${veiculo.ano}</td>
+                    <td>${veiculo.vendido ? 'Sim' : 'Não'}</td>
+                    <td>
+                        <button onclick="editarVeiculo(${veiculo.id})">Editar</button>
+                        <button onclick="excluirVeiculo(${veiculo.id})">Excluir</button>
+                    </td>
+                `;
+                corpo.appendChild(tr);
+            });
+        }
+
+        // Filtrar veículos
+        function filtrarVeiculos() {
+            const filtros = {};
+            const marca = document.getElementById('filtroMarca').value;
+            const ano = document.getElementById('filtroAno').value;
+
+            if (marca) filtros.marca = marca;
+            if (ano) filtros.ano = ano;
+
+            carregarVeiculos(filtros);
+        }
+
+        // Editar veículo
+        async function editarVeiculo(id) {
+            const veiculo = veiculos.find(v => v.id === id);
+            if (!veiculo) return;
+
+            const novoVendido = !veiculo.vendido;
+
+            try {
+                const response = await fetch(`${API_URL}/veiculos/${id}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ vendido: novoVendido })
+                });
+
+                if (response.ok) {
+                    showMessage('Veículo atualizado com sucesso!', 'success');
+                    carregarVeiculos();
+                    carregarDashboard();
+                }
+            } catch (error) {
+                showMessage('Erro ao atualizar veículo: ' + error.message, 'error');
+            }
+        }
+
+        async function excluirVeiculo(id) {
+            if (!confirm('Tem certeza que deseja excluir este veículo?')) return;
+
+            try {
+                const response = await fetch(`${API_URL}/veiculos/${id}`, {
+                    method: 'DELETE'
+                });
+
+                if (response.ok) {
+                    showMessage('Veículo excluído com sucesso!', 'success');
+                    carregarVeiculos();
+                    carregarDashboard();
+                }
+            } catch (error) {
+                showMessage('Erro ao excluir veículo: ' + error.message, 'error');
+            }
+        }
+
+        async function carregarDashboard() {
+            try {
+                const response1 = await fetch(`${API_URL}/dashboard/nao-vendidos`);
+                const naoVendidos = await response1.json();
+                document.getElementById('naoVendidos').textContent = naoVendidos.nao_vendidos;
+
+                const response2 = await fetch(`${API_URL}/dashboard/decada-fabricacao`);
+                const decadas = await response2.json();
+                document.getElementById('distribuicaoDecada').innerHTML =
+                    Object.entries(decadas).map(([decada, count]) =>
+                        `<p>Década ${decada} → ${count} veículos</p>`
+                    ).join('');
+
+                const response3 = await fetch(`${API_URL}/dashboard/distribuicao-marca`);
+                const marcas = await response3.json();
+                document.getElementById('distribuicaoMarca').innerHTML =
+                    Object.entries(marcas).map(([marca, count]) =>
+                        `<p>${marca.charAt(0).toUpperCase() + marca.slice(1)} → ${count} veículos</p>`
+                    ).join('');
+
+                const response4 = await fetch(`${API_URL}/dashboard/ultima-semana`);
+                const ultimaSemana = await response4.json();
+                document.getElementById('ultimaSemana').innerHTML =
+                    ultimaSemana.length > 0 ?
+                    ultimaSemana.map(veiculo =>
+                        `<p>${veiculo.veiculo} (${veiculo.marca}) - ${veiculo.ano}</p>`
+                    ).join('') :
+                    '<p>Nenhum veículo registrado na última semana</p>';
+
+            } catch (error) {
+                console.error('Erro ao carregar dashboard:', error);
+            }
+        }
+
+        function showMessage(message, type) {
+            const div = document.getElementById('mensagem');
+            div.textContent = message;
+            div.className = type;
+            setTimeout(() => div.textContent = '', 3000);
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            carregarMarcasValidas();
+            carregarVeiculos();
+            carregarDashboard();
+        });
+    </script>
+</body>
+</html>
